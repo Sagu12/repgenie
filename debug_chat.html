@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat History Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { background-color: #ffebee; color: #c62828; }
+        .success { background-color: #e8f5e8; color: #2e7d32; }
+        .info { background-color: #e3f2fd; color: #1565c0; }
+        button { padding: 10px 20px; margin: 5px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1976d2; }
+        #output { background: #f5f5f5; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Chat History Debug Tool</h1>
+        
+        <div class="section info">
+            <h3>📋 Instructions:</h3>
+            <p>1. Make sure your backend is running: <code>python fastapi_fitness_trainer.py</code></p>
+            <p>2. Enter your email address below (same as used in the app)</p>
+            <p>3. Click "Test Backend" to check if API is working</p>
+            <p>4. Click "Get Chat History" to see what history is being returned</p>
+        </div>
+
+        <div class="section">
+            <h3>🧪 Test Controls:</h3>
+            <input type="email" id="userEmail" placeholder="Enter your email address" style="width: 300px; padding: 8px; margin: 5px;">
+            <br>
+            <button onclick="testBackendHealth()">Test Backend</button>
+            <button onclick="testChatHistory()">Get Chat History</button>
+            <button onclick="sendTestMessage()">Send Test Message</button>
+            <button onclick="clearOutput()">Clear Output</button>
+        </div>
+
+        <div class="section">
+            <h3>📊 Output:</h3>
+            <div id="output">Ready to test...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            output.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = 'Output cleared...\n';
+        }
+        
+        async function testBackendHealth() {
+            log('Testing backend health...');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Backend is healthy: ${data.message}`, 'success');
+                } else {
+                    log(`Backend responded with status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`Backend connection failed: ${error.message}`, 'error');
+                log('Make sure to start backend: python fastapi_fitness_trainer.py', 'error');
+            }
+        }
+        
+        async function testChatHistory() {
+            const email = document.getElementById('userEmail').value;
+            if (!email) {
+                log('Please enter your email address first', 'error');
+                return;
+            }
+            
+            log(`Getting chat history for: ${email}`);
+            try {
+                const response = await fetch(`${API_BASE}/conversation_history/${encodeURIComponent(email)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Found ${data.conversations.length} conversation entries`, 'success');
+                    
+                    if (data.conversations.length === 0) {
+                        log('No chat history found - this is why you see the welcome message', 'info');
+                    } else {
+                        log('Recent conversations:', 'info');
+                        data.conversations.slice(0, 3).forEach((conv, i) => {
+                            log(`  ${i + 1}. ${conv.date} - ${conv.agent_type}: "${conv.human_message?.substring(0, 50)}..."`, 'info');
+                        });
+                    }
+                } else {
+                    log(`API responded with status: ${response.status}`, 'error');
+                    const errorText = await response.text();
+                    log(`Error details: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                log(`Failed to get chat history: ${error.message}`, 'error');
+            }
+        }
+        
+        async function sendTestMessage() {
+            const email = document.getElementById('userEmail').value;
+            if (!email) {
+                log('Please enter your email address first', 'error');
+                return;
+            }
+            
+            log('Sending test message...');
+            try {
+                const response = await fetch(`${API_BASE}/chat/text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        thread_id: email,
+                        query: 'Hello, this is a test message for debugging chat history',
+                        selected_agent: 'workout'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('Test message sent successfully!', 'success');
+                    log(`Response: ${data.response.substring(0, 100)}...`, 'info');
+                    log('Now try "Get Chat History" to see if it was saved', 'info');
+                } else {
+                    log(`Failed to send message: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`Error sending message: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-fill email if possible
+        window.onload = function() {
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                try {
+                    const user = JSON.parse(storedUser);
+                    document.getElementById('userEmail').value = user.email;
+                    log(`Auto-filled email from localStorage: ${user.email}`, 'info');
+                } catch (e) {
+                    log('Could not auto-fill email from localStorage', 'info');
+                }
+            }
+        };
+    </script>
+</body>
+</html> 
